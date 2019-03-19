@@ -1,0 +1,42 @@
+//probe process.syscall, process.end {
+//	printf("%s %d %s cpu: %d\n", execname(), pid(), pp(), cpu())
+//		print_usyms(ubacktrace())
+//}
+probe process("/data/memtester").function("compare_regions") {print_usyms(ubacktrace())}
+
+global malloc_stack, free_stack
+function filter_p()
+  {
+    if (pid() == target()) return 0; /* single-process */
+    return 1;
+  }
+probe process("/system/lib64/libc.so").function("malloc") 
+{
+    if (filter_p()) next;
+	//print_usyms(ubacktrace());
+	//sprint_usyms(ubacktrace());
+	malloc_stack[$bytes, sprint_usyms(ubacktrace())]<<<1;
+	//printf("=================%d,%s, %d %d %s\n",pid(),execname(), $bytes,@count(malloc_stack[$bytes, ubacktrace()]),sprint_usyms(ubacktrace()));
+
+}
+probe process("/system/lib64/libc.so").function("free") 
+{
+    if (filter_p()) next;
+	//print_usyms(ubacktrace());
+	free_stack[sprint_usyms(ubacktrace())]<<<1;
+	//printf("=================%d,%s, %d\n",pid(),execname(),@count(free_stack[ubacktrace()]));
+
+}
+probe timer.s(15), end
+{
+  printf("\n------------------malloc-------------------------------------\n\n")
+  foreach ([size, stack] in malloc_stack-) {
+    printf("size: %d, times %d\n%s\n", size, @count(malloc_stack[size, stack]), stack)
+  }
+  printf("\n-------------------free-------------------------------------\n\n")
+  foreach ([stack] in free_stack-) {
+    printf("times %d\n%s\n",  @count(free_stack[stack]), stack)
+  }
+  delete malloc_stack
+  delete free_stack
+}
