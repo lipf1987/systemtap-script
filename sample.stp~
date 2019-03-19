@@ -1,0 +1,1 @@
+probe kernel.function("sys_read") { printf("hi from sys_read!\n"); exit() }

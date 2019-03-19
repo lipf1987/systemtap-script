@@ -1,0 +1,28 @@
+#! /usr/bin/env stap
+//probe kernel.function("cpufreq_scale_freq_capacity").return {
+//	printf("scale_freq %ld cpu %d\n", $return, cpu());
+//    //print_stack(backtrace())
+//}
+//probe kernel.function("scale_cpu_capacity").return {
+//	printf("scale_cpu %ld cpu %d \n", $return, cpu());
+//    //print_stack(backtrace())
+//}
+//probe kernel.function("cpufreq_scale_max_freq_capacity").return {
+//	printf("max_freq_scale %ld %d\n", $return, $cpu);
+//    //print_stack(backtrace())
+//}
+//probe kernel.function("scale_freq_capacity") {
+//	printf("policy, %s \n freqs %s\n\n", $policy$$, $freqs$$);
+//    print_stack(backtrace())
+//}
+//probe kernel.function("enqueue_task_fair") {
+//	printf("rq %s\n\n", $rq$$);
+//    //print_stack(backtrace())
+//}
+//probe kernel.statement("enqueue_task_fair@fair.c:4629") {
+//	printf("cfs_rq %s\n\n", $cfs_rq$$);
+//}
+probe kernel.function("__update_load_avg").inline {
+	printf("cfs_rq %s\n\n", $cfs_rq$$);
+    //print_stack(backtrace())
+}

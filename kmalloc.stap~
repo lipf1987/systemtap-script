@@ -1,0 +1,42 @@
+#! /usr/bin/env stap
+global kmalloc_stack, kfree_stack
+
+#probe kernel.function("__kmalloc") {
+#        kmalloc_stack[$size, backtrace()]<<<1
+#}
+probe kernel.statement("__kmalloc@slub.c:3736") {
+        kmalloc_stack[$s->size, backtrace()]<<<1
+#	printf("%s\n", $s$$)
+}
+
+function freesize:long(arg:long) %{
+#include <linux/mm.h>
+#include <linux/gfp.h>
+
+#include <linux/slab.h>                                                                                                                                                                                      
+                                                                                                                                                                                                             
+	struct kmem_cache* s;
+	void* x = (void*)(STAP_ARG_arg);
+	struct page *page = virt_to_head_page(x);
+
+	STAP_RETVALUE =(long) page;
+%}
+probe kernel.statement("kfree@slub.c:3875") {
+        kfree_stack[freesize($x), backtrace()]<<<1
+}
+probe timer.ms(5000), end
+{
+  foreach ([size, stack] in kmalloc_stack-) {
+    printf("size: %d, times %d \n", size,  @count(kmalloc_stack[size, stack]))
+    //print_syms(stack)
+	print_stack(stack)
+  }
+  foreach ([size, stack] in kfree_stack-) {
+    printf("size: %d, times %d \n", size,  @count(kmalloc_stack[size, stack]))
+    //print_syms(stack)
+	print_stack(stack)
+  }
+  printf("\n-------------------------------------------------------\n\n")
+  delete kmalloc_stack
+}
+

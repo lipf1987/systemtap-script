@@ -1,0 +1,149 @@
+#! /usr/bin/env stap
+
+############################################################
+# Schedtimes.stp
+#
+# Copyright (C) 2009, 2014 Red Hat, Inc.
+#
+# This program is free software you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
+
+# Authors: Jason Baron <jbaron@redhat.com>
+#          Josh Stone <jistone@redhat.com>
+# profiles threads and displays their run times, queued times,
+# wait times, including i/o wait times.
+# Has two modes. When no arguments are given it profiles all
+# threads. Alternatively, you can pass -c "program name"
+############################################################
+
+//constants
+global DEAD=-1, RUNNING=1, QUEUED=2, SLEEPING=3
+
+global run_time, queued_time, sleep_time, iowait_time
+global pid_state, pid_names
+
+
+// For new enough kernels, roughly 2.6.32+, the @defined(@task->in_iowait)
+// tests will succeed and reduce these macros to nothing, including these
+// pid-iowait arrays.  For older kernels, the rq fallback will remain.
+
+global previous_timestamp
+
+function timestamp()
+{
+  return cpu_clock_us(0)
+}
+
+function update_times(pid, now)
+{
+  delta = now - previous_timestamp[pid]
+  previous_timestamp[pid] = now
+
+  if ((state = pid_state[pid]) > 0) {
+    if (state == SLEEPING)
+      sleep_time[pid] += delta
+    else if (state == QUEUED)
+      queued_time[pid] += delta
+    else if (state == RUNNING)
+      run_time[pid] += delta
+  }
+
+  return delta
+}
+
+
+function task_targeted(task_pid:long,task:long)
+{
+  if (task_pid && (!target() || target_set_pid(task_pid))) {
+    pid_names[task_tid(task)] = task_execname(task)
+    return 1
+  }
+  return 0
+}
+
+// Update the task name after exec
+probe kernel.trace("sched_process_exec")!,
+      kprocess.exec_complete
+{
+  if (tid() in pid_names)
+    pid_names[tid()] = execname()
+}
+
+
+probe scheduler.ctxswitch
+{
+  // Task $prev is scheduled off this cpu
+  if (task_targeted(prev_pid, prev_task)) {
+    pid = prev_pid
+    state =prevtsk_state
+    update_times(pid, timestamp())
+
+    if (state > 0) {
+      pid_state[pid] = SLEEPING
+    } else if (state == 0) {
+      pid_state[pid] = QUEUED
+    } else {
+      pid_state[pid] = DEAD
+    }
+  }
+
+  // Task $next is scheduled onto this cpu
+  if (task_targeted(next_pid, next_task)) {
+    pid = next_pid
+    update_times(pid, timestamp())
+    pid_state[next_pid] = RUNNING
+  }
+}
+
+probe scheduler.wakeup_new {
+  if (task_targeted(prev_pid, task)) {
+    pid = task_pid
+    state =task_state
+    
+
+    if (state > 0) {
+      pid_state[pid] = SLEEPING
+    } else if (state == 0) {
+      pid_state[pid] = QUEUED
+    } else {
+      pid_state[pid] = DEAD
+    }
+    //update_times(pid, timestamp())
+    previous_timestamp[pid] = timestamp()
+  }
+}
+probe scheduler.wakeup
+{
+  // Task $p is awakened
+  if (@choose_defined($success, 1) && task_targeted(task_pid, task)) {
+    delta = update_times(task_pid, timestamp())
+    if (pid_state[task_pid] == SLEEPING && @cast(task,"task_struct")->in_iowait) {
+      iowait_time[task_pid] += delta
+    }
+    pid_state[task_pid] = QUEUED
+  }
+}
+
+// Give task $p a final accounting
+probe scheduler.process_exit
+{
+  if (task_targeted(task_pid, task)) {
+    update_times(task_pid, timestamp())
+    pid_state[task_pid] = DEAD
+  }
+}
+
+probe end
+{
+  t = timestamp()
+  printf ("\n%16s: %6s %10s %10s %10s %10s %10s\n\n",
+         "execname", "pid", "run(us)", "sleep(us)", "iowait(us)",
+         "queued(us)", "total(us)")
+  foreach (pid+ in pid_state) {
+    update_times(pid, t)
+    printf("%16s: %6d %10d %10d %10d %10d %10d\n", pid_names[pid], pid,
+           run_time[pid], sleep_time[pid]-iowait_time[pid], iowait_time[pid], queued_time[pid],
+           (run_time[pid] + sleep_time[pid] + queued_time[pid]))
+  }
+}

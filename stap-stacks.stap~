@@ -1,0 +1,14 @@
+global s; 
+probe perf.sw.cpu_clock!,timer.profile {
+	s[backtrace()] <<< 1; 
+	bt = sprint_backtrace();
+	printf("%s",bt)
+	//print_stack(backtrace());
+} 
+probe end { 
+	foreach (i in s+) {
+		print_stack(i);
+ 		printf("\t%d\n", @count(s[i])); 
+	} 
+} 
+probe timer.s(60) { exit(); }

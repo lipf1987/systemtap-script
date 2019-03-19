@@ -1,0 +1,37 @@
+global cpu, cpu_d
+function freesize:long(arg:long) %{
+	STAP_RETVALUE =(long) (*(struct device**)(STAP_ARG_arg + 1120 -144));
+%}
+probe kernel.statement("cur_freq_show@devfreq.c:1020") {
+	 sz = @cast(freesize($dev),"devfreq_dev_profile")->get_cur_freq;
+	printf("%lx \n\n\n", sz);
+	printf("%s \n\n\n", @cast(freesize($dev),"devfreq_dev_profile")$$);
+}
+probe kernel.statement("song_mc_rpmsg_trans_stat_show@song_mc_rpmsg.c:285") {
+	printf("%s\n\n", $request_cur_copy$$);
+	printf("%s\n\n", $request$$);
+}
+probe kernel.function("do_cpu_up") {
+	cpu = $cpu;
+}
+probe kernel.function("do_cpu_up").return {
+	printf("up cpu = %d, ret = %d \n", cpu, $return);
+	delete cpu;
+}
+probe kernel.function("cpu_down") {
+	cpu_d = $cpu;
+}
+probe kernel.function("cpu_down").return {
+	printf("down cpu = %d, ret = %d \n", cpu_d, $return);
+	delete cpu_d;
+}
+probe kernel.function("cpuidle_enter") {
+	printf("cpuidle_enter cpu=%d, stat=%d \n", cpu(), $index);
+}
+probe kernel.function("cpuidle_enter").return {
+	printf(" cpuidle_enter return cpu=%d,stat=%d\n", cpu(), $return);
+}
+probe __vm.kmem_cache_alloc.kp {
+	//printf(" cpuidle_enter return cpu=%d,stat=%d\n", cpu(), $return);
+	printf("hello");
+}

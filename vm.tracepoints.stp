@@ -1,0 +1,31 @@
+#! /usr/bin/env stap
+
+global slabs, slabs_free
+
+probe vm.kmem_cache_alloc {
+	slabs [execname(), bytes_req]<<<1
+}
+probe vm.kmem_cache_free {
+	slabs_free [execname(), caller_function]<<<1
+}
+probe timer.ms(10000)
+{
+	dummy = "";
+	printf("\n+++++++++++++++++++++++++++++aclloc++++++++++++++++++++++++\n\n")
+	foreach ([name, bytes] in slabs) {
+		if (dummy != name)
+			printf("\nProcess:%s\n", name);
+        	printf("Slab_size:%d\tCount:%d\n", bytes, @count(slabs[name, bytes]));
+		dummy = name;
+	}
+	printf("\n+++++++++++++++++++++++++++++free++++++++++++++++++++\n\n")
+	foreach ([name, caller] in slabs_free) {
+		if (dummy != name)
+			printf("\nProcess:%s\n", name);
+        	printf("caller:%s\tCount:%d\n", caller, @count(slabs_free[name, caller]));
+		dummy = name;
+	}
+	delete slabs
+	delete slabs_free
+	printf("\n-------------------------------------------------------\n\n")
+}

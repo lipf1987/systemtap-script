@@ -1,0 +1,15 @@
+//probe process.syscall, process.end {
+//	printf("%s %d %s cpu: %d\n", execname(), pid(), pp(), cpu())
+//		print_usyms(ubacktrace())
+//}
+//probe process("/data/memtester").function("compare_regions") {print_usyms(ubacktrace())}
+
+global thread_times% 
+
+probe process("/system/lib64/libc.so").function("malloc") 
+{
+	print_usyms(ubacktrace());
+	thread_times[pid()]++;
+	printf("=================%d,%s, %d\n",pid(),execname(),thread_times[pid()]);
+
+}

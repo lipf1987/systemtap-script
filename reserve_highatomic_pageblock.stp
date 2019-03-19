@@ -1,0 +1,51 @@
+
+//probe kernel.statement("__kmalloc@slub.c:3736") {
+//probe kernel.function("reserve_highatomic_pageblock") {
+//  printf("\n------------------reserve_highatomic_pageblock-------------------------------------\n\n")
+//    print_stack(backtrace())
+//}
+//probe kernel.function("unreserve_highatomic_pageblock") {
+//  printf("\n------------------unreserve_highatomic_pageblock-------------------------------------\n\n")
+//    print_stack(backtrace())
+//}
+//function atomic:long(arg:long) %{
+//	if(STAP_ARG_arg &__GFP_ATOMIC )
+//		STAP_RETVALUE = 1;
+//	else
+//		STAP_RETVALUE = 0;
+//
+//%}
+//probe kerinel.function("kmem_cache_alloc") {
+//	//if(atomic($gfpflags))
+//	{
+//  	printf("\n------------------kmem_cache_alloc-------------------------------------\n\n")
+//    	print_stack(backtrace());
+//	}
+//}
+//function order1:long(arg:long) %{
+//	STAP_RETVALUE = ( (*(unsigned long *)(STAP_ARG_arg + 40)) >> 16);
+//
+//%}
+////probe kernel.function("allocate_slab") {
+////	if( order1($s) > 2 && atomic($flags)) {
+////  	printf("\n------------------kmem_cache_alloc--order: %d-----------------------------------\n\n", order1($s))
+////		printf("=====%s\n\n",$s$$)
+////    	print_stack(backtrace());
+////	}
+////}
+//probe kernel.function("__alloc_pages_nodemask") {
+//	//if( $order > 0 && atomic($gfp_mask)) {
+//  	printf("\n-----------------__alloc_pages_nodemask---order: %d-----------------------------------\n\n",$order)
+//		//printf("=====%s\n\n",$s$$)
+//    	print_stack(backtrace());
+//	//}
+//}
+//probe kernel.function("blk_account_io_completion") {
+//  printf("\n------------------blk_account_io_completion-------------------------------------\n\n")
+//    print_stack(backtrace())
+//}
+probe kernel.function("bpf_trace_printk") {
+  printf("\n------------------bpf_trace_printk-------------------------------------\n\n")
+    print_stack(backtrace())
+}
+

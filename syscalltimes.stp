@@ -1,0 +1,74 @@
+#! /bin/sh
+
+# Syscalltimes systemtap script
+# Copyright (C) 2007 IBM Corp.
+# Copyright (C) 2011 Red Hat, Inc.
+#
+# This file is part of systemtap, and is free software.  You can
+# redistribute it and/or modify it under the terms of the GNU General
+# Public License (GPL); either version 2, or (at your option) any
+# later version.
+
+###
+### syscalltime - Combination shell/systemtap script to measure system call
+###               counts and times.  Can be filtered by process IDs, process
+###               names and users.
+###
+
+global starttime, timebypid
+global follow_fork = 0   /* -Gfollow_fork=1 means trace descendant processes too */
+
+probe begin {
+	printf("Collecting data - type Ctrl-C to print output and exit...\n")
+}
+
+function filter_p()
+  {
+    if (target() == 0) return 0; /* system-wide */
+    if (!follow_fork && pid() != target()) return 1; /* single-process */
+    if (follow_fork && !target_set_pid(pid())) return 1; /* multi-process */
+    return 0;
+  }
+probe syscall.* {
+    if (filter_p()) next;
+	starttime[name, tid()] = gettimeofday_ns()
+}
+
+probe syscall.*.return {
+	# Skip if we have not seen this before
+    if (filter_p()) next;
+	if (!([name, tid()] in starttime)) next
+
+	delta = gettimeofday_ns() - starttime[name, tid()]
+	timebypid[name, pid()] <<< delta
+
+	delete starttime[name, tid()]
+}
+
+function print_header() {
+	printf("%22s %10s %12s %12s %12s %12s\n",
+	       "System Call", "Count", "Total ns",
+	       "Avg ns", "Min ns", "Max ns")
+}
+
+probe end {
+
+		curpid = -1
+		foreach ([call, pid-] in timebypid) {
+			if (curpid != pid) {
+				curpid = pid
+				printf("\nTimes for process ID %d:\n\n", curpid)
+				print_header()
+			}
+			printf("%22s %10d %12d %12d %12d %12d\n", call,
+			       @count(timebypid[call, pid]),
+			       @sum(timebypid[call, pid]),
+			       @avg(timebypid[call, pid]),
+			       @min(timebypid[call, pid]),
+			       @max(timebypid[call, pid]))
+		}
+		printf("\n")
+
+
+	delete timebypid
+}

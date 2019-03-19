@@ -1,0 +1,25 @@
+
+//probe kernel.function("account_system_time") {
+//probe kernel.function("account_user_time") {
+//probe kernel.function("account_process_tick") {
+//probe kernel.function("tick_periodic") {
+//probe kernel.function("tick_nohz_handler") {
+//probe kernel.function("load_balance") {
+//	printf("=========%d %s %d\n", cpu(), $sd$, $idle);
+//}
+
+//function freesize:long(arg:long) %{
+//	unsigned long * cpumask = STAP_ARG_arg;
+//	STAP_RETVALUE = * cpumask;
+//%}
+//probe kernel.function("find_busiest_group") {
+//	printf("=========%d %s %lx \n", cpu(), $env$, @cast($env,"lb_env")->dst_grpmask);
+//    print_stack(backtrace())
+//}
+probe kernel.statement("update_sd_lb_stats@fair.c:8112"){
+	printf("=========%d %lx\n", cpu(), @cast($env,"lb_env")->sd->child);
+}
+//probe kernel.function("task_cputime_adjusted") {
+//	printf("=========%s\n", execname());
+//	printf("=========%s\n", $p$$);
+//}
